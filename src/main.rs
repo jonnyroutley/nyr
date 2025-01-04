@@ -7,13 +7,13 @@ const DB_URL: &str = "sqlite://sqlite.db";
 
 async fn ensure_db_and_tables_exist() -> sqlx::Pool<Sqlite> {
     if !Sqlite::database_exists(DB_URL).await.unwrap_or(false) {
-        // println!("Creating database {}", DB_URL);
+        log::debug!("Creating database {}", DB_URL);
         match Sqlite::create_database(DB_URL).await {
-            Ok(_) => println!("Create db success"),
+            Ok(_) => log::debug!("Create db success"),
             Err(error) => panic!("error: {}", error),
         }
     } else {
-        // println!("Database already exists");
+        log::debug!("Database already exists");
     }
 
     let db = SqlitePool::connect(DB_URL).await.unwrap();
@@ -31,20 +31,9 @@ async fn ensure_db_and_tables_exist() -> sqlx::Pool<Sqlite> {
         }
     }
 
-    // println!("migration: {:?}", migration_results);
+    log::debug!("migration: {:?}", migration_results);
     db
 }
-// fn main() {
-//     element! {
-//         View(
-//             border_style: BorderStyle::Round,
-//             border_color: Color::Blue,
-//         ) {
-//             Text(content: "Hello, Fraser!")
-//         }
-//     }
-//     .print();
-// }
 
 #[derive(Clone, FromRow, Debug)]
 struct Target {
@@ -68,6 +57,7 @@ struct ProgressRecord {
 #[derive(Default, Props)]
 struct TargetsTableProps<'a> {
     targets: Option<&'a Vec<Target>>,
+    title: &'a str,
 }
 
 #[component]
@@ -81,6 +71,10 @@ fn TargetsTable<'a>(props: &TargetsTableProps<'a>) -> impl Into<AnyElement<'a>> 
             border_style: BorderStyle::Round,
             border_color: Color::Cyan,
         ) {
+            View(width: 100pct, justify_content: JustifyContent::Center, margin_bottom:1, ) {
+                Text(content: props.title, weight: Weight::Bold )
+            }
+
             View(border_style: BorderStyle::Single, border_edges: Edges::Bottom, border_color: Color::Grey) {
                 View(width: 10pct, justify_content: JustifyContent::Center) {
                     Text(content: "id", weight: Weight::Bold, decoration: TextDecoration::Underline)
@@ -208,18 +202,18 @@ async fn main() {
                         ::query_as::<_, Target>("SELECT * FROM targets")
                         .fetch_all(&db).await
                         .unwrap();
-                    element!(TargetsTable(targets: &targets)).print();
+                    element!(TargetsTable(targets: &targets, title: "targets")).print();
                 }
                 TargetCommands::Create { name, target_date, start_value, target_value } => {
-                    println!("Creating a new record");
                     let last_date_this_year = chrono::NaiveDate
                         ::from_ymd_opt(chrono::Utc::now().year(), 12, 31)
                         .unwrap();
 
                     let target_create_result = sqlx
-                        ::query(
+                        ::query_as::<_, Target>(
                             "INSERT INTO targets (name, target_date, status, start_value, target_value)
-                        VALUES ($1, $2, $3, $4, $5)"
+                        VALUES ($1, $2, $3, $4, $5)
+                        RETURNING *;"
                         )
                         .bind(name)
                         .bind(match target_date {
@@ -232,9 +226,11 @@ async fn main() {
                             None => &0.0,
                         })
                         .bind(target_value)
-                        .execute(&db).await
+                        .fetch_one(&db).await
                         .unwrap();
-                    println!("{:?}", target_create_result)
+                    let mut targets = Vec::new();
+                    targets.push(target_create_result);
+                    element!(TargetsTable(targets: &targets, title: "target created")).print();
                 }
                 TargetCommands::Delete { id } => {
                     println!("Deleting record with ID: {}", id);
