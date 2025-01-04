@@ -70,3 +70,4 @@ pub fn ProgressRecordsTable<'a>(
         }
     }
 }
+

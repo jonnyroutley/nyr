@@ -15,9 +15,9 @@ impl<'a> Default for ProgressBarProps<'a> {
     }
 }
 
-fn fetch_progress (target_id: &i64) -> f64 {
-  let target = 
-}
+// fn fetch_progress (target_id: &i64) -> f64 {
+//   let target = 
+// }
 
 #[component]
 pub fn ProgressBar<'a>(
