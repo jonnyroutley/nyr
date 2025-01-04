@@ -1,5 +1,5 @@
 mod targets;
-mod records;
+mod progress_records;
 
 use chrono::Datelike;
 use clap::{ Parser, Subcommand };
@@ -88,13 +88,14 @@ enum RecordCommands {
     List,
     Create {
         #[arg(short, long)]
-        name: String,
-        #[arg(short = 'd', long)]
-        target_date: chrono::NaiveDate,
+        /// The id of the target that this record is for.
+        target_id: String,
         #[arg(short, long)]
-        start_value: f64,
+        /// (Optional) When the record was done. Defaults to today.
+        entry_date: Option<chrono::NaiveDate>,
         #[arg(short, long)]
-        target_value: f64,
+        /// The value you want to record.
+        value: f64,
     },
     Delete {
         #[arg(short, long)]
@@ -145,23 +146,51 @@ async fn main() {
                     element!(targets::TargetsTable(targets: &targets, title: "target created")).print();
                 }
                 TargetCommands::Delete { id } => {
-                    println!("Deleting record with ID: {}", id);
                     sqlx::query("DELETE FROM targets WHERE id=$1")
                         .bind(id)
                         .execute(&db).await
                         .unwrap();
+                    println!("Target deleted");
                 }
             }
         Some(Commands::Records { action }) =>
             match action {
                 RecordCommands::List => {
                     println!("Listing all records");
+                    let progress_records = sqlx
+                        ::query_as::<_, progress_records::ProgressRecord>(
+                            "SELECT * FROM progress_records"
+                        )
+                        .fetch_all(&db).await
+                        .unwrap();
+                    element!(progress_records::ProgressRecordsTable(progress_records: &progress_records, title: "progress records")).print();
                 }
-                RecordCommands::Create { name, target_date, start_value, target_value } => {
-                    println!("Creating a new record with name: {}", name);
+                RecordCommands::Create { target_id, entry_date, value } => {
+                    let today = chrono::Utc::now().date_naive();
+                    let progress_record_create_result = sqlx
+                        ::query_as::<_, progress_records::ProgressRecord>(
+                            "INSERT INTO progress_records (target_id, entry_date, value)
+                    VALUES ($1, $2, $3)
+                    RETURNING *;"
+                        )
+                        .bind(target_id)
+                        .bind(match entry_date {
+                            Some(x) => x,
+                            None => { &today }
+                        })
+                        .bind(value)
+                        .fetch_one(&db).await
+                        .unwrap();
+                    let mut progress_records = Vec::new();
+                    progress_records.push(progress_record_create_result);
+                    element!(progress_records::ProgressRecordsTable(progress_records: &progress_records, title: "progress record created")).print();
                 }
                 RecordCommands::Delete { id } => {
-                    println!("Deleting record with ID: {}", id);
+                    sqlx::query("DELETE FROM progress_records WHERE id=$1")
+                        .bind(id)
+                        .execute(&db).await
+                        .unwrap();
+                    println!("Record deleted");
                 }
             }
         None => { println!("Welcome") }
