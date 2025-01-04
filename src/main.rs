@@ -4,7 +4,7 @@ mod progress_records;
 use chrono::Datelike;
 use clap::{ Parser, Subcommand };
 use iocraft::prelude::*;
-use sqlx::{ migrate::MigrateDatabase, FromRow, Sqlite, SqlitePool };
+use sqlx::{ migrate::MigrateDatabase, Sqlite, SqlitePool };
 
 const DB_URL: &str = "sqlite://sqlite.db";
 

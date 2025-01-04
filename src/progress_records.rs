@@ -5,7 +5,6 @@ use iocraft::prelude::*;
 pub struct ProgressRecord {
     id: i64,
     target_id: i64,
-    created_at: chrono::NaiveDateTime,
     entry_date: chrono::NaiveDate,
     value: f64,
 }
