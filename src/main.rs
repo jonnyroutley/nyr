@@ -1,3 +1,13 @@
+use iocraft::prelude::*;
+
 fn main() {
-    println!("Hello, world!");
+    element! {
+        View(
+            border_style: BorderStyle::Round,
+            border_color: Color::Blue,
+        ) {
+            Text(content: "Hello, Fraser!")
+        }
+    }
+    .print();
 }
