@@ -1,3 +1,6 @@
+mod targets;
+mod records;
+
 use chrono::Datelike;
 use clap::{ Parser, Subcommand };
 use iocraft::prelude::*;
@@ -33,97 +36,6 @@ async fn ensure_db_and_tables_exist() -> sqlx::Pool<Sqlite> {
 
     log::debug!("migration: {:?}", migration_results);
     db
-}
-
-#[derive(Clone, FromRow, Debug)]
-struct Target {
-    id: i64,
-    name: String,
-    target_date: chrono::NaiveDate,
-    status: String,
-    start_value: f64,
-    target_value: f64,
-}
-
-#[derive(Clone, FromRow, Debug)]
-struct ProgressRecord {
-    id: i64,
-    target_id: i64,
-    created_at: chrono::NaiveDateTime,
-    entry_date: chrono::NaiveDate,
-    value: f64,
-}
-
-#[derive(Default, Props)]
-struct TargetsTableProps<'a> {
-    targets: Option<&'a Vec<Target>>,
-    title: &'a str,
-}
-
-#[component]
-fn TargetsTable<'a>(props: &TargetsTableProps<'a>) -> impl Into<AnyElement<'a>> {
-    element! {
-        View(
-            margin_top: 1,
-            margin_bottom: 1,
-            flex_direction: FlexDirection::Column,
-            width: 100,
-            border_style: BorderStyle::Round,
-            border_color: Color::Cyan,
-        ) {
-            View(width: 100pct, justify_content: JustifyContent::Center, margin_bottom:1, ) {
-                Text(content: props.title, weight: Weight::Bold )
-            }
-
-            View(border_style: BorderStyle::Single, border_edges: Edges::Bottom, border_color: Color::Grey) {
-                View(width: 10pct, justify_content: JustifyContent::Center) {
-                    Text(content: "id", weight: Weight::Bold, decoration: TextDecoration::Underline)
-                }
-
-                View(width: 40pct, justify_content: JustifyContent::Center) {
-                    Text(content: "name", weight: Weight::Bold, decoration: TextDecoration::Underline)
-                }
-
-                View(width: 12.5pct, justify_content: JustifyContent::Center) {
-                    Text(content: "target date", weight: Weight::Bold, decoration: TextDecoration::Underline)
-                }
-                View(width: 12.5pct, justify_content: JustifyContent::Center) {
-                    Text(content: "status", weight: Weight::Bold, decoration: TextDecoration::Underline)
-                }
-                View(width: 12.5pct, justify_content: JustifyContent::Center) {
-                    Text(content: "start", weight: Weight::Bold, decoration: TextDecoration::Underline)
-                }
-                View(width: 12.5pct, justify_content: JustifyContent::Center) {
-                    Text(content: "target", weight: Weight::Bold, decoration: TextDecoration::Underline)
-                }
-            }
-
-            #(props.targets.map(|targets| targets.iter().enumerate().map(|(i, target)| element! {
-                View(background_color: if i % 2 == 0 { None } else { Some(Color::DarkGrey) }) {
-                    View(width: 10pct, justify_content: JustifyContent::Center) {
-                        Text(content: target.id.to_string())
-                    }
-
-                    View(width: 40pct, justify_content: JustifyContent::Center) {
-                        Text(content: target.name.clone())
-                    }
-
-                    View(width: 12.5pct, justify_content: JustifyContent::Center) {
-                        Text(content: target.target_date.to_string())
-                    }
-                    View(width: 12.5pct, justify_content: JustifyContent::Center) {
-                        Text(content: target.status.to_string())
-                    }
-                    View(width: 12.5pct, justify_content: JustifyContent::Center) {
-                        Text(content: target.start_value.to_string())
-                    }
-                    View(width: 12.5pct, justify_content: JustifyContent::Center) {
-                        Text(content: target.target_value.to_string())
-                    }
-                }
-            })).into_iter().flatten())
-        }
-    }
 }
 
 #[derive(Parser)]
@@ -199,10 +111,10 @@ async fn main() {
             match action {
                 TargetCommands::List => {
                     let targets = sqlx
-                        ::query_as::<_, Target>("SELECT * FROM targets")
+                        ::query_as::<_, targets::Target>("SELECT * FROM targets")
                         .fetch_all(&db).await
                         .unwrap();
-                    element!(TargetsTable(targets: &targets, title: "targets")).print();
+                    element!(targets::TargetsTable(targets: &targets, title: "targets")).print();
                 }
                 TargetCommands::Create { name, target_date, start_value, target_value } => {
                     let last_date_this_year = chrono::NaiveDate
@@ -210,7 +122,7 @@ async fn main() {
                         .unwrap();
 
                     let target_create_result = sqlx
-                        ::query_as::<_, Target>(
+                        ::query_as::<_, targets::Target>(
                             "INSERT INTO targets (name, target_date, status, start_value, target_value)
                         VALUES ($1, $2, $3, $4, $5)
                         RETURNING *;"
@@ -230,7 +142,7 @@ async fn main() {
                         .unwrap();
                     let mut targets = Vec::new();
                     targets.push(target_create_result);
-                    element!(TargetsTable(targets: &targets, title: "target created")).print();
+                    element!(targets::TargetsTable(targets: &targets, title: "target created")).print();
                 }
                 TargetCommands::Delete { id } => {
                     println!("Deleting record with ID: {}", id);
