@@ -50,7 +50,6 @@ async fn ensure_db_and_tables_exist() -> sqlx::Pool<Sqlite> {
 struct Target {
     id: i64,
     name: String,
-    created_at: chrono::NaiveDateTime,
     target_date: chrono::NaiveDate,
     status: String,
     start_value: f64,
@@ -64,6 +63,73 @@ struct ProgressRecord {
     created_at: chrono::NaiveDateTime,
     entry_date: chrono::NaiveDate,
     value: f64,
+}
+
+#[derive(Default, Props)]
+struct TargetsTableProps<'a> {
+    targets: Option<&'a Vec<Target>>,
+}
+
+#[component]
+fn TargetsTable<'a>(props: &TargetsTableProps<'a>) -> impl Into<AnyElement<'a>> {
+    element! {
+        View(
+            margin_top: 1,
+            margin_bottom: 1,
+            flex_direction: FlexDirection::Column,
+            width: 100,
+            border_style: BorderStyle::Round,
+            border_color: Color::Cyan,
+        ) {
+            View(border_style: BorderStyle::Single, border_edges: Edges::Bottom, border_color: Color::Grey) {
+                View(width: 10pct, justify_content: JustifyContent::Center) {
+                    Text(content: "id", weight: Weight::Bold, decoration: TextDecoration::Underline)
+                }
+
+                View(width: 40pct, justify_content: JustifyContent::Center) {
+                    Text(content: "name", weight: Weight::Bold, decoration: TextDecoration::Underline)
+                }
+
+                View(width: 12.5pct, justify_content: JustifyContent::Center) {
+                    Text(content: "target date", weight: Weight::Bold, decoration: TextDecoration::Underline)
+                }
+                View(width: 12.5pct, justify_content: JustifyContent::Center) {
+                    Text(content: "status", weight: Weight::Bold, decoration: TextDecoration::Underline)
+                }
+                View(width: 12.5pct, justify_content: JustifyContent::Center) {
+                    Text(content: "start", weight: Weight::Bold, decoration: TextDecoration::Underline)
+                }
+                View(width: 12.5pct, justify_content: JustifyContent::Center) {
+                    Text(content: "target", weight: Weight::Bold, decoration: TextDecoration::Underline)
+                }
+            }
+
+            #(props.targets.map(|targets| targets.iter().enumerate().map(|(i, target)| element! {
+                View(background_color: if i % 2 == 0 { None } else { Some(Color::DarkGrey) }) {
+                    View(width: 10pct, justify_content: JustifyContent::Center) {
+                        Text(content: target.id.to_string())
+                    }
+
+                    View(width: 40pct, justify_content: JustifyContent::Center) {
+                        Text(content: target.name.clone())
+                    }
+
+                    View(width: 12.5pct, justify_content: JustifyContent::Center) {
+                        Text(content: target.target_date.to_string())
+                    }
+                    View(width: 12.5pct, justify_content: JustifyContent::Center) {
+                        Text(content: target.status.to_string())
+                    }
+                    View(width: 12.5pct, justify_content: JustifyContent::Center) {
+                        Text(content: target.start_value.to_string())
+                    }
+                    View(width: 12.5pct, justify_content: JustifyContent::Center) {
+                        Text(content: target.target_value.to_string())
+                    }
+                }
+            })).into_iter().flatten())
+        }
+    }
 }
 
 #[derive(Parser)]
@@ -138,12 +204,11 @@ async fn main() {
         Some(Commands::Targets { action }) =>
             match action {
                 TargetCommands::List => {
-                    let target_results = sqlx
+                    let targets = sqlx
                         ::query_as::<_, Target>("SELECT * FROM targets")
                         .fetch_all(&db).await
                         .unwrap();
-                    println!("Listing all targets");
-                    println!("{:?}", target_results)
+                    element!(TargetsTable(targets: &targets)).print();
                 }
                 TargetCommands::Create { name, target_date, start_value, target_value } => {
                     println!("Creating a new record");
@@ -193,46 +258,4 @@ async fn main() {
             }
         None => { println!("Welcome") }
     }
-
-    // let result = sqlx::query(
-    //     "SELECT name
-    //      FROM sqlite_schema
-    //      WHERE type ='table'
-    //      AND name NOT LIKE 'sqlite_%';",
-    // )
-    // .fetch_all(&db)
-    // .await
-    // .unwrap();
-
-    // for (idx, row) in result.iter().enumerate() {
-    //     println!("[{}]: {:?}", idx, row.get::<String, &str>("name"));
-    // }
-
-    // let result = sqlx::query("INSERT INTO users (name) VALUES (?)")
-    //     .bind("bobby")
-    //     .execute(&db)
-    //     .await
-    //     .unwrap();
-
-    // println!("Query result: {:?}", result);
-
-    // let user_results = sqlx::query_as::<_, User>("SELECT id, name, active FROM users")
-    //     .fetch_all(&db)
-    //     .await
-    //     .unwrap();
-
-    // for user in user_results {
-    //     println!(
-    //         "[{}] name: {}, active: {}",
-    //         user.id, &user.name, user.active
-    //     );
-    // }
-
-    // let delete_result = sqlx::query("DELETE FROM users WHERE name=$1")
-    //     .bind("bobby")
-    //     .execute(&db)
-    //     .await
-    //     .unwrap();
-
-    // println!("Delete result: {:?}", delete_result);
 }
