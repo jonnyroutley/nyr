@@ -1,4 +1,5 @@
-use sqlx::FromRow;
+use chrono::{ Datelike, NaiveDate };
+use sqlx::{ FromRow, Pool, Sqlite };
 use iocraft::prelude::*;
 
 #[derive(Clone, FromRow, Debug)]
@@ -9,6 +10,7 @@ pub struct Target {
     status: String,
     start_value: f64,
     target_value: f64,
+    // target_type: String
 }
 
 #[derive(Default, Props)]
@@ -81,4 +83,50 @@ pub fn TargetsTable<'a>(props: &TargetsTableProps<'a>) -> impl Into<AnyElement<'
             })).into_iter().flatten())
         }
     }
+}
+
+pub async fn get_targets(db: &Pool<Sqlite>) -> Vec<Target> {
+    sqlx::query_as::<_, Target>("SELECT * FROM targets").fetch_all(db).await.unwrap()
+}
+
+pub async fn create_target(
+    db: &Pool<Sqlite>,
+    name: &String,
+    target_date: &Option<NaiveDate>,
+    start_value: &Option<f64>,
+    target_value: &f64
+) -> Target {
+    let last_date_this_year = chrono::NaiveDate
+        ::from_ymd_opt(chrono::Utc::now().year(), 12, 31)
+        .unwrap();
+
+    sqlx::query_as::<_, Target>(
+        "INSERT INTO targets (name, target_date, status, start_value, target_value)
+                        VALUES ($1, $2, $3, $4, $5)
+                        RETURNING *;"
+    )
+        .bind(name)
+        .bind(match target_date {
+            Some(x) => x,
+            None => { &last_date_this_year }
+        })
+        .bind("active")
+        .bind(match start_value {
+            Some(x) => x,
+            None => &0.0,
+        })
+        .bind(target_value)
+        .fetch_one(db).await
+        .unwrap()
+}
+
+pub async fn delete_target(
+    db: &Pool<Sqlite>,
+    id: &i64
+) {
+    sqlx::query("DELETE FROM targets WHERE id=$1")
+        .bind(id)
+        .execute(db).await
+        .unwrap();
+    println!("Target deleted");
 }

@@ -1,5 +1,6 @@
 mod targets;
 mod progress_records;
+mod progress_bar;
 
 use chrono::Datelike;
 use clap::{ Parser, Subcommand };
@@ -95,7 +96,7 @@ enum RecordCommands {
         entry_date: Option<chrono::NaiveDate>,
         #[arg(short, long)]
         /// The value you want to record.
-        value: f64,
+        value: String, // JR TODO: maybe fix this
     },
     Delete {
         #[arg(short, long)]
@@ -111,46 +112,23 @@ async fn main() {
         Some(Commands::Targets { action }) =>
             match action {
                 TargetCommands::List => {
-                    let targets = sqlx
-                        ::query_as::<_, targets::Target>("SELECT * FROM targets")
-                        .fetch_all(&db).await
-                        .unwrap();
+                    let targets = targets::get_targets(&db).await;
                     element!(targets::TargetsTable(targets: &targets, title: "targets")).print();
                 }
                 TargetCommands::Create { name, target_date, start_value, target_value } => {
-                    let last_date_this_year = chrono::NaiveDate
-                        ::from_ymd_opt(chrono::Utc::now().year(), 12, 31)
-                        .unwrap();
-
-                    let target_create_result = sqlx
-                        ::query_as::<_, targets::Target>(
-                            "INSERT INTO targets (name, target_date, status, start_value, target_value)
-                        VALUES ($1, $2, $3, $4, $5)
-                        RETURNING *;"
-                        )
-                        .bind(name)
-                        .bind(match target_date {
-                            Some(x) => x,
-                            None => { &last_date_this_year }
-                        })
-                        .bind("active")
-                        .bind(match start_value {
-                            Some(x) => x,
-                            None => &0.0,
-                        })
-                        .bind(target_value)
-                        .fetch_one(&db).await
-                        .unwrap();
+                    let target_create_result = targets::create_target(
+                        &db,
+                        name,
+                        target_date,
+                        start_value,
+                        target_value
+                    ).await;
                     let mut targets = Vec::new();
                     targets.push(target_create_result);
                     element!(targets::TargetsTable(targets: &targets, title: "target created")).print();
                 }
                 TargetCommands::Delete { id } => {
-                    sqlx::query("DELETE FROM targets WHERE id=$1")
-                        .bind(id)
-                        .execute(&db).await
-                        .unwrap();
-                    println!("Target deleted");
+                    targets::delete_target(&db, id).await;
                 }
             }
         Some(Commands::Records { action }) =>
@@ -193,6 +171,11 @@ async fn main() {
                     println!("Record deleted");
                 }
             }
-        None => { println!("Welcome") }
+        None => {
+            // Progress bar !
+            smol::block_on(
+                element!(progress_bar::ProgressBar(target_id: &1)).render_loop()
+            ).unwrap();
+        }
     }
 }

@@ -5,5 +5,6 @@ CREATE TABLE targets (
     target_date DATE,
     status TEXT CHECK (status IN ('active', 'completed', 'abandoned')) DEFAULT 'active',
     start_value REAL DEFAULT 0.0,
-    target_value REAL
+    target_value REAL,
+    target_type TEXT check(target_type IN ('count', 'value'))
 )
