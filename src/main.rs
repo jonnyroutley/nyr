@@ -1,8 +1,7 @@
-mod targets;
-mod progress_records;
 mod progress_bar;
+mod progress_records;
+mod targets;
 
-use chrono::Datelike;
 use clap::{ Parser, Subcommand };
 use iocraft::prelude::*;
 use sqlx::{ migrate::MigrateDatabase, Sqlite, SqlitePool };
@@ -36,6 +35,15 @@ async fn ensure_db_and_tables_exist() -> sqlx::Pool<Sqlite> {
     }
 
     log::debug!("migration: {:?}", migration_results);
+    targets::create_target(
+        &db,
+        &"Films".to_string(),
+        &None::<chrono::NaiveDate>,
+        &None::<targets::TargetType>,
+        &None::<f64>,
+        &24.0
+    ).await;
+
     db
 }
 
@@ -90,13 +98,16 @@ enum RecordCommands {
     Create {
         #[arg(short, long)]
         /// The id of the target that this record is for.
-        target_id: String,
+        target_id: i64,
         #[arg(short, long)]
         /// (Optional) When the record was done. Defaults to today.
         entry_date: Option<chrono::NaiveDate>,
         #[arg(short, long)]
-        /// The value you want to record.
-        value: String, // JR TODO: maybe fix this
+        /// (Optional for "value" targets) The name of the record.
+        item_name: Option<String>,
+        #[arg(short, long)]
+        /// (Optional for "count" targets) The value you want to record.
+        value: Option<f64>,
     },
     Delete {
         #[arg(short, long)]
@@ -120,6 +131,7 @@ async fn main() {
                         &db,
                         name,
                         target_date,
+                        &Some(targets::TargetType::Count),
                         start_value,
                         target_value
                     ).await;
@@ -143,7 +155,10 @@ async fn main() {
                         .unwrap();
                     element!(progress_records::ProgressRecordsTable(progress_records: &progress_records, title: "progress records")).print();
                 }
-                RecordCommands::Create { target_id, entry_date, value } => {
+                RecordCommands::Create { target_id, entry_date, item_name, value } => {
+                    let target = targets::get_target(&db, &target_id).await;
+                    println!("{:?}", target);
+
                     let today = chrono::Utc::now().date_naive();
                     let progress_record_create_result = sqlx
                         ::query_as::<_, progress_records::ProgressRecord>(
@@ -154,7 +169,7 @@ async fn main() {
                         .bind(target_id)
                         .bind(match entry_date {
                             Some(x) => x,
-                            None => { &today }
+                            None => &today,
                         })
                         .bind(value)
                         .fetch_one(&db).await

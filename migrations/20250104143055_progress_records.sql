@@ -4,6 +4,6 @@ CREATE TABLE progress_records (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     entry_date DATE DEFAULT CURRENT_DATE,
     value REAL,
-    item_name TEXT
+    item_name TEXT,
     FOREIGN KEY(target_id) REFERENCES targets(id)
 )

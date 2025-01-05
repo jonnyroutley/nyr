@@ -1,5 +1,7 @@
-use sqlx::FromRow;
+use chrono::NaiveDate;
 use iocraft::prelude::*;
+use sqlx::FromRow;
+use sqlx::{Pool, Sqlite};
 
 #[derive(Clone, FromRow, Debug)]
 pub struct ProgressRecord {
@@ -17,7 +19,7 @@ pub struct ProgressRecordsTableProps<'a> {
 
 #[component]
 pub fn ProgressRecordsTable<'a>(
-    props: &ProgressRecordsTableProps<'a>
+    props: &ProgressRecordsTableProps<'a>,
 ) -> impl Into<AnyElement<'a>> {
     element! {
         View(
@@ -71,3 +73,27 @@ pub fn ProgressRecordsTable<'a>(
     }
 }
 
+pub async fn create_progress_record(
+    db: &Pool<Sqlite>,
+    target_id: &i64,
+    entry_date: &Option<NaiveDate>,
+    value: &Option<f64>,
+    item_name: &Option<String>,
+) -> ProgressRecord {
+    let today = chrono::Utc::now().date_naive();
+    sqlx::query_as::<_, ProgressRecord>(
+        "INSERT INTO progress_records (target_id, entry_date, value, item_name)
+                    VALUES ($1, $2, $3, $4)
+                    RETURNING *;",
+    )
+    .bind(target_id)
+    .bind(match entry_date {
+        Some(x) => x,
+        None => &today,
+    })
+    .bind(value)
+    .bind(item_name)
+    .fetch_one(db)
+    .await
+    .unwrap()
+}

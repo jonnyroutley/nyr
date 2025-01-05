@@ -1,7 +1,14 @@
-use chrono::{ Datelike, NaiveDate };
-use sqlx::{ FromRow, Pool, Sqlite };
-use iocraft::prelude::*;
 use crate::progress_records;
+use chrono::{ Datelike, NaiveDate };
+use iocraft::prelude::*;
+use sqlx::{ FromRow, Pool, Sqlite };
+
+#[derive(Clone, Debug, sqlx::Type)]
+#[sqlx(type_name = "target_type", rename_all = "lowercase")]
+pub enum TargetType {
+    Count,
+    Value,
+}
 
 #[derive(Clone, FromRow, Debug)]
 pub struct Target {
@@ -11,7 +18,7 @@ pub struct Target {
     status: String,
     start_value: f64,
     target_value: f64,
-    // target_type: String
+    target_type: TargetType,
 }
 
 #[derive(Default, Props)]
@@ -40,7 +47,7 @@ pub fn TargetsTable<'a>(props: &TargetsTableProps<'a>) -> impl Into<AnyElement<'
                     Text(content: "id", weight: Weight::Bold, decoration: TextDecoration::Underline)
                 }
 
-                View(width: 40pct, justify_content: JustifyContent::Center) {
+                View(width: 25pct, justify_content: JustifyContent::Center) {
                     Text(content: "name", weight: Weight::Bold, decoration: TextDecoration::Underline)
                 }
 
@@ -64,7 +71,7 @@ pub fn TargetsTable<'a>(props: &TargetsTableProps<'a>) -> impl Into<AnyElement<'
                         Text(content: target.id.to_string())
                     }
 
-                    View(width: 40pct, justify_content: JustifyContent::Center) {
+                    View(width: 25pct, justify_content: JustifyContent::Center) {
                         Text(content: target.name.clone())
                     }
 
@@ -90,10 +97,18 @@ pub async fn get_targets(db: &Pool<Sqlite>) -> Vec<Target> {
     sqlx::query_as::<_, Target>("SELECT * FROM targets").fetch_all(db).await.unwrap()
 }
 
+pub async fn get_target(db: &Pool<Sqlite>, id: &i64) -> Target {
+    sqlx::query_as::<_, Target>("SELECT * FROM targets WHERE id=$1")
+        .bind(id)
+        .fetch_one(db).await
+        .unwrap()
+}
+
 pub async fn create_target(
     db: &Pool<Sqlite>,
     name: &String,
     target_date: &Option<NaiveDate>,
+    target_type: &Option<TargetType>,
     start_value: &Option<f64>,
     target_value: &f64
 ) -> Target {
@@ -102,16 +117,20 @@ pub async fn create_target(
         .unwrap();
 
     sqlx::query_as::<_, Target>(
-        "INSERT INTO targets (name, target_date, status, start_value, target_value)
-                        VALUES ($1, $2, $3, $4, $5)
+        "INSERT INTO targets (name, target_date, status,target_type, start_value, target_value)
+                        VALUES ($1, $2, $3, $4, $5, $6)
                         RETURNING *;"
     )
         .bind(name)
         .bind(match target_date {
             Some(x) => x,
-            None => { &last_date_this_year }
+            None => &last_date_this_year,
         })
         .bind("active")
+        .bind(match target_type {
+            Some(x) => x,
+            None => &TargetType::Count,
+        })
         .bind(match start_value {
             Some(x) => x,
             None => &0.0,
