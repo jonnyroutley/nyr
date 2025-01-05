@@ -2,8 +2,15 @@ use chrono::Local;
 use iocraft::prelude::*;
 use std::time::Duration;
 
+use crate::{progress_bar, targets};
+
+#[derive(Default, Props)]
+pub struct MainProps {
+    pub target_progresses: Vec<targets::TargetProgress>,
+}
+
 #[component]
-fn Example(mut hooks: Hooks) -> impl Into<AnyElement<'static>> {
+fn Main(mut hooks: Hooks, props: &MainProps) -> impl Into<AnyElement<'static>> {
     let (width, height) = hooks.use_terminal_size();
     let mut system = hooks.use_context_mut::<SystemContext>();
     let mut time = hooks.use_state(|| Local::now());
@@ -37,9 +44,6 @@ fn Example(mut hooks: Hooks) -> impl Into<AnyElement<'static>> {
             // subtract one in case there's a scrollbar
             width: width - 1,
             height,
-            // background_color: Color::DarkGrey,
-            border_style: BorderStyle::Double,
-            border_color: Color::Blue,
             flex_direction: FlexDirection::Column,
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
@@ -53,14 +57,25 @@ fn Example(mut hooks: Hooks) -> impl Into<AnyElement<'static>> {
                 padding_left: 8,
                 padding_right: 8,
             ) {
-                Text(content: "Hello, World!", weight: Weight::Bold)
-                // Text(content: format!("Current Time: {}", time.get().format("%r")))
+                View(flex_direction: FlexDirection::Column, justify_content: JustifyContent::Center, align_items: AlignItems::Center, ) {
+                    View(
+                        margin_bottom: 1,
+                    ) {
+                        Text(content: "Resolutions 2025", weight: Weight::Bold, align: TextAlign::Center, )
+                    }
+                    #(props.target_progresses.iter().map(|target_progress| element! {
+                        View {
+                            progress_bar::StaticProgressBar(progress_percentage: target_progress.percentage, target: format!("{:.0}", target_progress.target_value), title: target_progress.name.clone())
+                        }
+                    }))
+
+                }
             }
             Text(content: "Press \"q\" to quit.")
         }
     }
 }
 
-pub fn run_app() {
-    smol::block_on(element!(Example).fullscreen()).unwrap();
+pub fn run_app(target_progresses: Vec<targets::TargetProgress>) {
+    smol::block_on(element!(Main(target_progresses)).fullscreen()).unwrap();
 }

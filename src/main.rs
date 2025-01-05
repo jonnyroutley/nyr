@@ -227,13 +227,8 @@ async fn main() {
             }
         },
         None => {
-            app::run_app();
-            // // Progress bar !
-            // let progress = targets::get_progress_for_target(&db, &1).await * 100.0;
-            // smol::block_on(
-            //     element!(progress_bar::ProgressBar(progress_percentage: &progress )).render_loop(),
-            // )
-            // .unwrap();
+            let target_progresses = targets::get_progress_for_all_targets(&db).await;
+            app::run_app(target_progresses);
         }
     }
 }

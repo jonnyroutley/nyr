@@ -166,26 +166,81 @@ pub async fn delete_target(db: &Pool<Sqlite>, id: &i64) {
     println!("Target deleted");
 }
 
-pub async fn get_progress_for_target(db: &Pool<Sqlite>, target_id: &i64) -> f64 {
-    let target = get_target(db, target_id).await;
-    let current: f64 = match target.target_type {
-        TargetType::Count => sqlx::query_scalar!(
-            "SELECT COUNT (*) from progress_records where target_id = ?",
+#[derive(Debug)]
+pub struct TargetProgress {
+    pub target_id: i64,
+    pub percentage: f64,
+    pub name: String,
+    pub target_value: f64,
+}
+
+pub async fn get_progress_for_all_targets(db: &Pool<Sqlite>) -> Vec<TargetProgress> {
+    let rows = sqlx::query!(
+        r#"
+        WITH progress_values AS (
+            SELECT 
+                t.id as target_id,
+                t.target_type as target_type,
+                t.target_value as target_value,
+                t.start_value as start_value,
+                t.name as name,
+                CASE 
+                    WHEN t.target_type = 'Count' THEN CAST(COUNT(pr.id) AS FLOAT)
+                    WHEN t.target_type = 'Value' THEN COALESCE(MAX(pr.value), t.start_value)
+                    ELSE 0 
+                END as current_value
+            FROM targets t
+            LEFT JOIN progress_records pr ON t.id = pr.target_id
+            GROUP BY t.id
+        )
+        SELECT 
             target_id,
-        )
-        .fetch_one(db)
-        .await
-        .unwrap() as f64,
+            CAST(current_value AS FLOAT) / CAST(target_value AS FLOAT) as percentage,
+            name,
+            target_value
+        FROM progress_values
+        "#
+    )
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
 
-        TargetType::Value => sqlx::query_scalar!(
-            "SELECT MAX (value) from progress_records WHERE target_id = ?",
-            target_id
-        )
-        .fetch_one(db)
-        .await
-        .unwrap()
-        .unwrap_or(target.start_value),
-    };
+    rows.into_iter()
+        .map(|row| TargetProgress {
+            target_id: row.target_id.unwrap(),
+            percentage: row.percentage.unwrap_or(0.0),
+            name: row.name.unwrap(),
+            target_value: row.target_value.unwrap(),
+        })
+        .collect()
+}
 
-    current / target.target_value
+pub async fn get_progress_for_target(db: &Pool<Sqlite>, target_id: i64) -> f64 {
+    let result = sqlx::query!(
+        r#"
+        WITH progress_value AS (
+            SELECT 
+                t.target_type as target_type,
+                t.target_value as target_value,
+                t.start_value as start_value,
+                CASE 
+                    WHEN t.target_type = 'Count' THEN CAST(COUNT(pr.id) AS FLOAT)
+                    WHEN t.target_type = 'Value' THEN COALESCE(MAX(pr.value), t.start_value)
+                    ELSE 0 
+                END as current_value
+            FROM targets t
+            LEFT JOIN progress_records pr ON t.id = pr.target_id
+            WHERE t.id = ?
+            GROUP BY t.id
+        )
+        SELECT CAST(current_value AS FLOAT) / CAST(target_value AS FLOAT) as percentage
+        FROM progress_value
+        "#,
+        target_id
+    )
+    .fetch_optional(db)
+    .await
+    .unwrap_or_default();
+
+    result.map(|r| r.percentage.unwrap_or(0.0)).unwrap_or(0.0)
 }
