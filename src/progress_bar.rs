@@ -24,8 +24,8 @@ pub fn ProgressBar<'a>(
 
     hooks.use_future(async move {
         loop {
-            smol::Timer::after(Duration::from_millis(10)).await;
-            progress.set((progress.get() + 0.05).min(100.0));
+            smol::Timer::after(Duration::from_millis(100)).await;
+            progress.set((progress.get() + 0.5).min(100.0));
         }
     });
 
