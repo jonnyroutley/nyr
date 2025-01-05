@@ -2,9 +2,11 @@ mod progress_bar;
 mod progress_records;
 mod targets;
 
-use clap::{ Parser, Subcommand };
+use std::str::FromStr;
+
+use clap::{Parser, Subcommand};
 use iocraft::prelude::*;
-use sqlx::{ migrate::MigrateDatabase, Sqlite, SqlitePool };
+use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
 
 const DB_URL: &str = "sqlite://sqlite.db";
 
@@ -24,7 +26,11 @@ async fn ensure_db_and_tables_exist() -> sqlx::Pool<Sqlite> {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let migrations = std::path::Path::new(&crate_dir).join("./migrations");
 
-    let migration_results = sqlx::migrate::Migrator::new(migrations).await.unwrap().run(&db).await;
+    let migration_results = sqlx::migrate::Migrator::new(migrations)
+        .await
+        .unwrap()
+        .run(&db)
+        .await;
 
     match migration_results {
         Ok(_) => {}
@@ -76,12 +82,19 @@ enum TargetCommands {
         #[arg(short, long)]
         /// The target you're trying to achieve.
         name: String,
+
+        #[arg(long)]
+        /// (Optional) The type of target ("count" or "value") you're trying to achieve. Defaults to "count".
+        target_type: Option<String>,
+
         #[arg(short = 'd', long)]
         /// (Optional) When you'd like to achieve the goal by. Defaults to end of this year.
         target_date: Option<chrono::NaiveDate>,
+
         #[arg(short, long)]
         /// (Optional) The starting value of your target. Defaults to 0.
         start_value: Option<f64>,
+
         #[arg(short, long)]
         /// The target value you're trying to achieve.
         target_value: f64,
@@ -120,72 +133,85 @@ async fn main() {
     let db = ensure_db_and_tables_exist().await;
     let cli = Cli::parse();
     match &cli.command {
-        Some(Commands::Targets { action }) =>
-            match action {
-                TargetCommands::List => {
-                    let targets = targets::get_targets(&db).await;
-                    element!(targets::TargetsTable(targets: &targets, title: "targets")).print();
-                }
-                TargetCommands::Create { name, target_date, start_value, target_value } => {
-                    let target_create_result = targets::create_target(
-                        &db,
-                        name,
-                        target_date,
-                        &Some(targets::TargetType::Count),
-                        start_value,
-                        target_value
-                    ).await;
-                    let mut targets = Vec::new();
-                    targets.push(target_create_result);
-                    element!(targets::TargetsTable(targets: &targets, title: "target created")).print();
-                }
-                TargetCommands::Delete { id } => {
-                    targets::delete_target(&db, id).await;
-                }
+        Some(Commands::Targets { action }) => match action {
+            TargetCommands::List => {
+                let targets = targets::get_targets(&db).await;
+                element!(targets::TargetsTable(targets: &targets, title: "targets")).print();
             }
-        Some(Commands::Records { action }) =>
-            match action {
-                RecordCommands::List => {
-                    let progress_records = progress_records::get_progress_records(&db).await;
-                    element!(progress_records::ProgressRecordsTable(progress_records: &progress_records, title: "progress records")).print();
-                }
-                RecordCommands::Create { target_id, entry_date, item_name, value } => {
-                    let target = targets::get_target(&db, &target_id).await;
-                    match target.target_type {
-                        targets::TargetType::Count => {
-                            if item_name.is_none() {
-                                panic!("Item name is required for count targets");
-                            }
-                        }
-                        targets::TargetType::Value => {
-                            if value.is_none() {
-                                panic!("Value is required for value targets");
-                            }
+            TargetCommands::Create {
+                name,
+                target_date,
+                target_type,
+                start_value,
+                target_value,
+            } => {
+                let checked_target_type = match target_type {
+                    Some(x) => targets::TargetType::from_str(x).unwrap(),
+                    None => targets::TargetType::Count,
+                };
+
+                let target_create_result = targets::create_target(
+                    &db,
+                    name,
+                    target_date,
+                    checked_target_type,
+                    start_value,
+                    target_value,
+                )
+                .await;
+                let mut targets = Vec::new();
+                targets.push(target_create_result);
+                element!(targets::TargetsTable(targets: &targets, title: "target created")).print();
+            }
+            TargetCommands::Delete { id } => {
+                targets::delete_target(&db, id).await;
+            }
+        },
+        Some(Commands::Records { action }) => match action {
+            RecordCommands::List => {
+                let progress_records = progress_records::get_progress_records(&db).await;
+                element!(progress_records::ProgressRecordsTable(progress_records: &progress_records, title: "progress records")).print();
+            }
+            RecordCommands::Create {
+                target_id,
+                entry_date,
+                item_name,
+                value,
+            } => {
+                let target = targets::get_target(&db, &target_id).await;
+                match target.target_type {
+                    targets::TargetType::Count => {
+                        if item_name.is_none() {
+                            panic!("Item name is required for count targets");
                         }
                     }
+                    targets::TargetType::Value => {
+                        if value.is_none() {
+                            panic!("Value is required for value targets");
+                        }
+                    }
+                }
 
-                    let progress_record_create_result = progress_records::create_progress_record(
-                        &db,
-                        &target_id,
-                        entry_date,
-                        value,
-                        item_name
-                    ).await;
-                    let mut progress_records = Vec::new();
-                    progress_records.push(progress_record_create_result);
-                    element!(progress_records::ProgressRecordsTable(progress_records: &progress_records, title: "progress record created")).print();
-                }
-                RecordCommands::Delete { id } => {
-                    progress_records::delete_progress_record(&db, id).await;
-                    println!("Record deleted");
-                }
+                let progress_record_create_result = progress_records::create_progress_record(
+                    &db, &target_id, entry_date, value, item_name,
+                )
+                .await;
+                let mut progress_records = Vec::new();
+                progress_records.push(progress_record_create_result);
+                element!(progress_records::ProgressRecordsTable(progress_records: &progress_records, title: "progress record created")).print();
             }
+            RecordCommands::Delete { id } => {
+                progress_records::delete_progress_record(&db, id).await;
+                println!("Record deleted");
+            }
+        },
         None => {
             // Progress bar !
-            // let progress = targets::get_progress_for_target(&db, &1).await;
-            // smol::block_on(
-            //     element!(progress_bar::ProgressBar(target_id: &1)).render_loop()
-            // ).unwrap();
+            let progress = targets::get_progress_for_target(&db, &1).await * 100.0;
+            smol::block_on(
+                element!(progress_bar::ProgressBar(progress_percentage: &progress )).render_loop(),
+            )
+            .unwrap();
         }
     }
 }
