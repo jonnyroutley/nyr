@@ -1,3 +1,4 @@
+mod app;
 mod progress_bar;
 mod progress_records;
 mod targets;
@@ -6,51 +7,71 @@ use std::str::FromStr;
 
 use clap::{Parser, Subcommand};
 use iocraft::prelude::*;
-use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
+use sqlx::{
+    migrate::{MigrateDatabase, Migrator},
+    Sqlite, SqlitePool,
+};
 
-const DB_URL: &str = "sqlite://sqlite.db";
+use directories::ProjectDirs;
+use include_dir::{include_dir, Dir};
+use std::path::PathBuf;
 
-async fn ensure_db_and_tables_exist() -> sqlx::Pool<Sqlite> {
-    if !Sqlite::database_exists(DB_URL).await.unwrap_or(false) {
-        log::debug!("Creating database {}", DB_URL);
-        match Sqlite::create_database(DB_URL).await {
-            Ok(_) => log::debug!("Create db success"),
-            Err(error) => panic!("error: {}", error),
+static MIGRATIONS_DIR: Dir = include_dir!("./migrations");
+
+fn get_db_path() -> Result<(String, PathBuf), Box<dyn std::error::Error>> {
+    let proj_dirs =
+        ProjectDirs::from("", "", "nyr").ok_or("Failed to determine project directories")?;
+
+    let data_dir = proj_dirs.data_dir();
+    std::fs::create_dir_all(data_dir)?;
+
+    let db_path = data_dir.join("database.sqlite");
+
+    let db_url = format!("sqlite:{}", db_path.display());
+
+    let migrations_path = data_dir.join("migrations");
+    if !migrations_path.exists() {
+        std::fs::create_dir_all(&migrations_path)?;
+        // Extract bundled migrations
+        for entry in MIGRATIONS_DIR.files() {
+            std::fs::write(
+                migrations_path.join(entry.path().file_name().unwrap()),
+                entry.contents(),
+            )?;
         }
+    }
+
+    Ok((db_url, migrations_path))
+}
+
+async fn ensure_db_and_tables_exist() -> Result<SqlitePool, Box<dyn std::error::Error>> {
+    let (db_url, migrations_path) = get_db_path()?;
+
+    if !Sqlite::database_exists(&db_url).await.unwrap_or(false) {
+        log::debug!("Creating database {}", db_url);
+        Sqlite::create_database(&db_url).await.map_err(|error| {
+            log::error!("Failed to create database: {}", error);
+            error
+        })?;
+        log::debug!("Create db success");
     } else {
         log::debug!("Database already exists");
     }
 
-    let db = SqlitePool::connect(DB_URL).await.unwrap();
+    let db = SqlitePool::connect(&db_url).await.map_err(|error| {
+        log::error!("Failed to connect to database: {}", error);
+        error
+    })?;
 
-    let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-    let migrations = std::path::Path::new(&crate_dir).join("./migrations");
-
-    let migration_results = sqlx::migrate::Migrator::new(migrations)
-        .await
-        .unwrap()
-        .run(&db)
-        .await;
-
-    match migration_results {
-        Ok(_) => {}
-        // println!("Migration success"),
+    match Migrator::new(migrations_path).await?.run(&db).await {
+        Ok(_) => log::debug!("Migration successful"),
         Err(error) => {
-            panic!("error: {}", error);
+            log::error!("Migration failed: {}", error);
+            return Err(error.into());
         }
     }
 
-    log::debug!("migration: {:?}", migration_results);
-    // targets::create_target(
-    //     &db,
-    //     &"Films".to_string(),
-    //     &None::<chrono::NaiveDate>,
-    //     &None::<targets::TargetType>,
-    //     &None::<f64>,
-    //     &24.0
-    // ).await;
-
-    db
+    Ok(db)
 }
 
 #[derive(Parser)]
@@ -130,7 +151,7 @@ enum RecordCommands {
 
 #[tokio::main]
 async fn main() {
-    let db = ensure_db_and_tables_exist().await;
+    let db = ensure_db_and_tables_exist().await.unwrap();
     let cli = Cli::parse();
     match &cli.command {
         Some(Commands::Targets { action }) => match action {
@@ -206,12 +227,13 @@ async fn main() {
             }
         },
         None => {
-            // Progress bar !
-            let progress = targets::get_progress_for_target(&db, &1).await * 100.0;
-            smol::block_on(
-                element!(progress_bar::ProgressBar(progress_percentage: &progress )).render_loop(),
-            )
-            .unwrap();
+            app::run_app();
+            // // Progress bar !
+            // let progress = targets::get_progress_for_target(&db, &1).await * 100.0;
+            // smol::block_on(
+            //     element!(progress_bar::ProgressBar(progress_percentage: &progress )).render_loop(),
+            // )
+            // .unwrap();
         }
     }
 }
