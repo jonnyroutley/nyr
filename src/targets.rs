@@ -215,32 +215,33 @@ pub async fn get_progress_for_all_targets(db: &Pool<Sqlite>) -> Vec<TargetProgre
         .collect()
 }
 
-pub async fn get_progress_for_target(db: &Pool<Sqlite>, target_id: i64) -> f64 {
-    let result = sqlx::query!(
-        r#"
-        WITH progress_value AS (
-            SELECT 
-                t.target_type as target_type,
-                t.target_value as target_value,
-                t.start_value as start_value,
-                CASE 
-                    WHEN t.target_type = 'Count' THEN CAST(COUNT(pr.id) AS FLOAT)
-                    WHEN t.target_type = 'Value' THEN COALESCE(MAX(pr.value), t.start_value)
-                    ELSE 0 
-                END as current_value
-            FROM targets t
-            LEFT JOIN progress_records pr ON t.id = pr.target_id
-            WHERE t.id = ?
-            GROUP BY t.id
-        )
-        SELECT CAST(current_value AS FLOAT) / CAST(target_value AS FLOAT) as percentage
-        FROM progress_value
-        "#,
-        target_id
-    )
-    .fetch_optional(db)
-    .await
-    .unwrap_or_default();
+// maybe in the future
+// pub async fn get_progress_for_target(db: &Pool<Sqlite>, target_id: i64) -> f64 {
+//     let result = sqlx::query!(
+//         r#"
+//         WITH progress_value AS (
+//             SELECT 
+//                 t.target_type as target_type,
+//                 t.target_value as target_value,
+//                 t.start_value as start_value,
+//                 CASE 
+//                     WHEN t.target_type = 'Count' THEN CAST(COUNT(pr.id) AS FLOAT)
+//                     WHEN t.target_type = 'Value' THEN COALESCE(MAX(pr.value), t.start_value)
+//                     ELSE 0 
+//                 END as current_value
+//             FROM targets t
+//             LEFT JOIN progress_records pr ON t.id = pr.target_id
+//             WHERE t.id = ?
+//             GROUP BY t.id
+//         )
+//         SELECT CAST(current_value AS FLOAT) / CAST(target_value AS FLOAT) as percentage
+//         FROM progress_value
+//         "#,
+//         target_id
+//     )
+//     .fetch_optional(db)
+//     .await
+//     .unwrap_or_default();
 
-    result.map(|r| r.percentage.unwrap_or(0.0)).unwrap_or(0.0)
-}
+//     result.map(|r| r.percentage.unwrap_or(0.0)).unwrap_or(0.0)
+// }
