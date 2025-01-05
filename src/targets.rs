@@ -185,8 +185,8 @@ pub async fn get_progress_for_all_targets(db: &Pool<Sqlite>) -> Vec<TargetProgre
                 t.start_value as start_value,
                 t.name as name,
                 CASE 
-                    WHEN t.target_type = 'Count' THEN CAST(COUNT(pr.id) AS FLOAT)
-                    WHEN t.target_type = 'Value' THEN COALESCE(MAX(pr.value), t.start_value)
+                    WHEN t.target_type = 'count' THEN CAST(COUNT(pr.id) AS FLOAT)
+                    WHEN t.target_type = 'value' THEN COALESCE(MAX(pr.value), t.start_value)
                     ELSE 0 
                 END as current_value
             FROM targets t
@@ -208,7 +208,7 @@ pub async fn get_progress_for_all_targets(db: &Pool<Sqlite>) -> Vec<TargetProgre
     rows.into_iter()
         .map(|row| TargetProgress {
             target_id: row.target_id.unwrap(),
-            percentage: row.percentage.unwrap_or(0.0),
+            percentage: row.percentage.unwrap() * 100.0,
             name: row.name.unwrap(),
             target_value: row.target_value.unwrap(),
         })
@@ -220,14 +220,14 @@ pub async fn get_progress_for_all_targets(db: &Pool<Sqlite>) -> Vec<TargetProgre
 //     let result = sqlx::query!(
 //         r#"
 //         WITH progress_value AS (
-//             SELECT 
+//             SELECT
 //                 t.target_type as target_type,
 //                 t.target_value as target_value,
 //                 t.start_value as start_value,
-//                 CASE 
+//                 CASE
 //                     WHEN t.target_type = 'Count' THEN CAST(COUNT(pr.id) AS FLOAT)
 //                     WHEN t.target_type = 'Value' THEN COALESCE(MAX(pr.value), t.start_value)
-//                     ELSE 0 
+//                     ELSE 0
 //                 END as current_value
 //             FROM targets t
 //             LEFT JOIN progress_records pr ON t.id = pr.target_id

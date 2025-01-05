@@ -57,8 +57,8 @@ pub fn StaticProgressBar(
             View(padding: 0, width: 15) {
                 Text(content: format!("{}", props.title))
             }
-            View(border_style: BorderStyle::Round, border_color: Color::Blue, width: 50) {
-                View(width: Percent(props.progress_percentage as f32), height: 1, background_color: Color::Green)
+            View(border_style: BorderStyle::Round, border_color: Color::Blue, width: 50, align_items: AlignItems::Center) {
+                View(width: Percent(props.progress_percentage as f32), height: 1, background_color: Color::Green,)
             }
             View(padding: 0, width: 10, padding_left: 4) {
                 Text(content: format!("{}", props.target))
