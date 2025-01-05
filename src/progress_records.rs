@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use iocraft::prelude::*;
 use sqlx::FromRow;
-use sqlx::{Pool, Sqlite};
+use sqlx::{ Pool, Sqlite };
 
 #[derive(Clone, FromRow, Debug)]
 pub struct ProgressRecord {
@@ -9,6 +9,7 @@ pub struct ProgressRecord {
     target_id: i64,
     entry_date: chrono::NaiveDate,
     value: f64,
+    item_name: Option<String>,
 }
 
 #[derive(Default, Props)]
@@ -19,7 +20,7 @@ pub struct ProgressRecordsTableProps<'a> {
 
 #[component]
 pub fn ProgressRecordsTable<'a>(
-    props: &ProgressRecordsTableProps<'a>,
+    props: &ProgressRecordsTableProps<'a>
 ) -> impl Into<AnyElement<'a>> {
     element! {
         View(
@@ -39,12 +40,16 @@ pub fn ProgressRecordsTable<'a>(
                     Text(content: "id", weight: Weight::Bold, decoration: TextDecoration::Underline)
                 }
 
-                View(width: 40pct, justify_content: JustifyContent::Center) {
+                View(width: 10pct, justify_content: JustifyContent::Center) {
                     Text(content: "target_id", weight: Weight::Bold, decoration: TextDecoration::Underline)
                 }
 
                 View(width: 25pct, justify_content: JustifyContent::Center) {
                     Text(content: "entry date", weight: Weight::Bold, decoration: TextDecoration::Underline)
+                }
+
+                View(width: 30pct, justify_content: JustifyContent::Center) {
+                    Text(content: "name", weight: Weight::Bold, decoration: TextDecoration::Underline)
                 }
                 View(width: 25pct, justify_content: JustifyContent::Center) {
                     Text(content: "value", weight: Weight::Bold, decoration: TextDecoration::Underline)
@@ -57,13 +62,18 @@ pub fn ProgressRecordsTable<'a>(
                         Text(content: progress_record.id.to_string())
                     }
 
-                    View(width: 40pct, justify_content: JustifyContent::Center) {
+                    View(width: 10pct, justify_content: JustifyContent::Center) {
                         Text(content: progress_record.target_id.to_string())
                     }
 
                     View(width: 25pct, justify_content: JustifyContent::Center) {
                         Text(content: progress_record.entry_date.to_string())
                     }
+
+                    View(width: 30pct, justify_content: JustifyContent::Center) {
+                        Text(content: progress_record.item_name.clone().unwrap_or_else(|| "N/A".to_string()))
+                    }
+
                     View(width: 25pct, justify_content: JustifyContent::Center) {
                         Text(content: progress_record.value.to_string())
                     }
@@ -78,22 +88,31 @@ pub async fn create_progress_record(
     target_id: &i64,
     entry_date: &Option<NaiveDate>,
     value: &Option<f64>,
-    item_name: &Option<String>,
+    item_name: &Option<String>
 ) -> ProgressRecord {
     let today = chrono::Utc::now().date_naive();
     sqlx::query_as::<_, ProgressRecord>(
         "INSERT INTO progress_records (target_id, entry_date, value, item_name)
                     VALUES ($1, $2, $3, $4)
-                    RETURNING *;",
+                    RETURNING *;"
     )
-    .bind(target_id)
-    .bind(match entry_date {
-        Some(x) => x,
-        None => &today,
-    })
-    .bind(value)
-    .bind(item_name)
-    .fetch_one(db)
-    .await
-    .unwrap()
+        .bind(target_id)
+        .bind(match entry_date {
+            Some(x) => x,
+            None => &today,
+        })
+        .bind(value)
+        .bind(item_name)
+        .fetch_one(db).await
+        .unwrap()
+}
+
+pub async fn get_progress_records(db: &Pool<Sqlite>) -> Vec<ProgressRecord> {
+    sqlx::query_as::<_, ProgressRecord>("SELECT * FROM progress_records")
+        .fetch_all(db).await
+        .unwrap()
+}
+
+pub async fn delete_progress_record(db: &Pool<Sqlite>, id: &i64) {
+    sqlx::query("DELETE FROM progress_records WHERE id = $1").bind(id).execute(db).await.unwrap();
 }

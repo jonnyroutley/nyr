@@ -12,13 +12,13 @@ pub enum TargetType {
 
 #[derive(Clone, FromRow, Debug)]
 pub struct Target {
-    id: i64,
-    name: String,
-    target_date: chrono::NaiveDate,
-    status: String,
-    start_value: f64,
-    target_value: f64,
-    target_type: TargetType,
+    pub id: i64,
+    pub name: String,
+    pub target_date: chrono::NaiveDate,
+    pub status: String,
+    pub start_value: f64,
+    pub target_value: f64,
+    pub target_type: TargetType,
 }
 
 #[derive(Default, Props)]

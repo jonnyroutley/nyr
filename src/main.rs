@@ -35,14 +35,14 @@ async fn ensure_db_and_tables_exist() -> sqlx::Pool<Sqlite> {
     }
 
     log::debug!("migration: {:?}", migration_results);
-    targets::create_target(
-        &db,
-        &"Films".to_string(),
-        &None::<chrono::NaiveDate>,
-        &None::<targets::TargetType>,
-        &None::<f64>,
-        &24.0
-    ).await;
+    // targets::create_target(
+    //     &db,
+    //     &"Films".to_string(),
+    //     &None::<chrono::NaiveDate>,
+    //     &None::<targets::TargetType>,
+    //     &None::<f64>,
+    //     &24.0
+    // ).await;
 
     db
 }
@@ -146,43 +146,37 @@ async fn main() {
         Some(Commands::Records { action }) =>
             match action {
                 RecordCommands::List => {
-                    println!("Listing all records");
-                    let progress_records = sqlx
-                        ::query_as::<_, progress_records::ProgressRecord>(
-                            "SELECT * FROM progress_records"
-                        )
-                        .fetch_all(&db).await
-                        .unwrap();
+                    let progress_records = progress_records::get_progress_records(&db).await;
                     element!(progress_records::ProgressRecordsTable(progress_records: &progress_records, title: "progress records")).print();
                 }
                 RecordCommands::Create { target_id, entry_date, item_name, value } => {
                     let target = targets::get_target(&db, &target_id).await;
-                    println!("{:?}", target);
+                    match target.target_type {
+                        targets::TargetType::Count => {
+                            if item_name.is_none() {
+                                panic!("Item name is required for count targets");
+                            }
+                        }
+                        targets::TargetType::Value => {
+                            if value.is_none() {
+                                panic!("Value is required for value targets");
+                            }
+                        }
+                    }
 
-                    let today = chrono::Utc::now().date_naive();
-                    let progress_record_create_result = sqlx
-                        ::query_as::<_, progress_records::ProgressRecord>(
-                            "INSERT INTO progress_records (target_id, entry_date, value)
-                    VALUES ($1, $2, $3)
-                    RETURNING *;"
-                        )
-                        .bind(target_id)
-                        .bind(match entry_date {
-                            Some(x) => x,
-                            None => &today,
-                        })
-                        .bind(value)
-                        .fetch_one(&db).await
-                        .unwrap();
+                    let progress_record_create_result = progress_records::create_progress_record(
+                        &db,
+                        &target_id,
+                        entry_date,
+                        value,
+                        item_name
+                    ).await;
                     let mut progress_records = Vec::new();
                     progress_records.push(progress_record_create_result);
                     element!(progress_records::ProgressRecordsTable(progress_records: &progress_records, title: "progress record created")).print();
                 }
                 RecordCommands::Delete { id } => {
-                    sqlx::query("DELETE FROM progress_records WHERE id=$1")
-                        .bind(id)
-                        .execute(&db).await
-                        .unwrap();
+                    progress_records::delete_progress_record(&db, id).await;
                     println!("Record deleted");
                 }
             }
