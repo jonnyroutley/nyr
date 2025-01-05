@@ -182,7 +182,7 @@ async fn main() {
             }
         None => {
             // Progress bar !
-            let progress = targets::get_progress_for_target(&db, &1).await;
+            // let progress = targets::get_progress_for_target(&db, &1).await;
             // smol::block_on(
             //     element!(progress_bar::ProgressBar(target_id: &1)).render_loop()
             // ).unwrap();

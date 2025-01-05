@@ -1,5 +1,5 @@
 use iocraft::prelude::*;
-use sqlx::any::AnyValue;
+// use sqlx::any::AnyValue;
 use std::time::Duration;
 
 #[derive(Props)]
@@ -22,7 +22,7 @@ impl<'a> Default for ProgressBarProps<'a> {
 #[component]
 pub fn ProgressBar<'a>(
     mut hooks: Hooks,
-    props: &ProgressBarProps<'a>
+    // props: &ProgressBarProps<'a>
 ) -> impl Into<AnyElement<'static>> {
     let mut system = hooks.use_context_mut::<SystemContext>();
     let mut progress = hooks.use_state::<f32, _>(|| 0.0);

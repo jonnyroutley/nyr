@@ -1,4 +1,4 @@
-use crate::progress_records;
+// use crate::progress_records;
 use chrono::{ Datelike, NaiveDate };
 use iocraft::prelude::*;
 use sqlx::{ FromRow, Pool, Sqlite };
@@ -145,14 +145,14 @@ pub async fn delete_target(db: &Pool<Sqlite>, id: &i64) {
     println!("Target deleted");
 }
 
-pub async fn get_progress_for_target(
-    db: &Pool<Sqlite>,
-    target_id: &i64
-) -> Vec<progress_records::ProgressRecord> {
-    sqlx::query_as::<_, progress_records::ProgressRecord>(
-        "SELECT * FROM progress_records WHERE target_id=$1"
-    )
-        .bind(target_id)
-        .fetch_all(db).await
-        .unwrap()
-}
+// pub async fn get_progress_for_target(
+//     db: &Pool<Sqlite>,
+//     target_id: &i64
+// ) -> Vec<progress_records::ProgressRecord> {
+//     sqlx::query_as::<_, progress_records::ProgressRecord>(
+//         "SELECT * FROM progress_records WHERE target_id=$1"
+//     )
+//         .bind(target_id)
+//         .fetch_all(db).await
+//         .unwrap()
+// }
